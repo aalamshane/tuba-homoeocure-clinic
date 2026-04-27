@@ -1,8 +1,10 @@
 package com.clinic.management.controller;
 
 import com.clinic.management.dto.PageResponse;
+import com.clinic.management.dto.PatientPaymentSummaryResponse;
 import com.clinic.management.model.Appointment;
 import com.clinic.management.model.Doctor;
+import com.clinic.management.model.Payment;
 import com.clinic.management.model.Patient;
 import com.clinic.management.service.ClinicService;
 import jakarta.validation.Valid;
@@ -61,6 +63,11 @@ public class ClinicController {
         return clinicService.getAppointmentsForPatient(id);
     }
 
+    @GetMapping("/patients/{id}/payments")
+    public PatientPaymentSummaryResponse getPatientPayments(@PathVariable String id) {
+        return clinicService.getPaymentSummaryForPatient(id);
+    }
+
     @PostMapping("/patients")
     public Patient createPatient(@Valid @RequestBody Patient patient) {
         return clinicService.savePatient(patient);
@@ -74,6 +81,16 @@ public class ClinicController {
     @DeleteMapping("/patients/{id}")
     public void deletePatient(@PathVariable String id) {
         clinicService.deletePatient(id);
+    }
+
+    @PostMapping("/patients/{id}/payments")
+    public Payment createPayment(@PathVariable String id, @Valid @RequestBody Payment payment) {
+        return clinicService.savePayment(id, payment);
+    }
+
+    @DeleteMapping("/patients/{patientId}/payments/{paymentId}")
+    public void deletePayment(@PathVariable String patientId, @PathVariable String paymentId) {
+        clinicService.deletePayment(patientId, paymentId);
     }
 
     @GetMapping("/doctors")

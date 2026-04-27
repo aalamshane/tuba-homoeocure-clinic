@@ -13,6 +13,10 @@ public class Patient {
     @Id
     private String id;
 
+    @NotNull
+    @Min(1)
+    private Integer cardNumber;
+
     @NotBlank
     private String fullName;
 
@@ -38,6 +42,14 @@ public class Patient {
 
     public void setId(String id) {
         this.id = id;
+    }
+
+    public Integer getCardNumber() {
+        return cardNumber;
+    }
+
+    public void setCardNumber(Integer cardNumber) {
+        this.cardNumber = cardNumber;
     }
 
     public String getFullName() {

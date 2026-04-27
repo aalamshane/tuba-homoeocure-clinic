@@ -1,18 +1,24 @@
 package com.clinic.management.service;
 
 import com.clinic.management.dto.PageResponse;
+import com.clinic.management.dto.PatientPaymentSummaryResponse;
 import com.clinic.management.model.Appointment;
 import com.clinic.management.model.Doctor;
+import com.clinic.management.model.Payment;
 import com.clinic.management.model.Patient;
 import com.clinic.management.repository.AppointmentRepository;
 import com.clinic.management.repository.DoctorRepository;
+import com.clinic.management.repository.PaymentRepository;
 import com.clinic.management.repository.PatientRepository;
+import jakarta.annotation.PostConstruct;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.index.Index;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -20,21 +26,31 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class ClinicService {
-
     private final PatientRepository patientRepository;
     private final DoctorRepository doctorRepository;
     private final AppointmentRepository appointmentRepository;
+    private final PaymentRepository paymentRepository;
     private final MongoTemplate mongoTemplate;
 
     public ClinicService(
             PatientRepository patientRepository,
             DoctorRepository doctorRepository,
             AppointmentRepository appointmentRepository,
+            PaymentRepository paymentRepository,
             MongoTemplate mongoTemplate) {
         this.patientRepository = patientRepository;
         this.doctorRepository = doctorRepository;
         this.appointmentRepository = appointmentRepository;
+        this.paymentRepository = paymentRepository;
         this.mongoTemplate = mongoTemplate;
+    }
+
+    @PostConstruct
+    public void initializePatientCardNumbers() {
+        mongoTemplate.indexOps(Patient.class)
+                .ensureIndex(new Index().on("cardNumber", Sort.Direction.ASC).unique().named("idx_patients_cardNumber"));
+        mongoTemplate.indexOps(Payment.class)
+                .ensureIndex(new Index().on("patientId", Sort.Direction.ASC).named("idx_payments_patientId"));
     }
 
     public List<Patient> getPatients() {
@@ -61,10 +77,22 @@ public class ClinicService {
 
     public Patient updatePatient(String id, Patient patient) {
         patient.setId(id);
-        return patientRepository.save(patient);
+        Patient savedPatient = patientRepository.save(patient);
+
+        List<Payment> payments = paymentRepository.findByPatientIdOrderByPaymentDateDesc(id);
+        for (Payment payment : payments) {
+            if (!savedPatient.getFullName().equals(payment.getPatientName())) {
+                payment.setPatientName(savedPatient.getFullName());
+                paymentRepository.save(payment);
+            }
+        }
+
+        return savedPatient;
     }
 
     public void deletePatient(String id) {
+        appointmentRepository.deleteByPatientId(id);
+        paymentRepository.deleteByPatientId(id);
         patientRepository.deleteById(id);
     }
 
@@ -128,17 +156,50 @@ public class ClinicService {
         appointmentRepository.deleteById(id);
     }
 
+    public PatientPaymentSummaryResponse getPaymentSummaryForPatient(String patientId) {
+        getPatientById(patientId);
+        List<Payment> payments = paymentRepository.findByPatientIdOrderByPaymentDateDesc(patientId);
+        double totalBilled = payments.stream().mapToDouble(Payment::getTotalAmount).sum();
+        double totalPaid = payments.stream().mapToDouble(Payment::getAmountPaid).sum();
+        return new PatientPaymentSummaryResponse(payments, totalBilled, totalPaid);
+    }
+
+    public Payment savePayment(String patientId, Payment payment) {
+        Patient patient = getPatientById(patientId);
+        validatePaymentAmounts(payment);
+        payment.setPatientId(patientId);
+        payment.setPatientName(patient.getFullName());
+        return paymentRepository.save(payment);
+    }
+
+    public void deletePayment(String patientId, String paymentId) {
+        Payment payment = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found"));
+
+        if (!patientId.equals(payment.getPatientId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payment does not belong to the selected patient");
+        }
+
+        paymentRepository.deleteById(paymentId);
+    }
+
     private Query buildPatientQuery(String search) {
         Query query = new Query();
 
         if (StringUtils.hasText(search)) {
             String regex = ".*" + java.util.regex.Pattern.quote(search.trim()) + ".*";
-            query.addCriteria(new Criteria().orOperator(
+            List<Criteria> searchCriteria = new ArrayList<>(List.of(
                     Criteria.where("fullName").regex(regex, "i"),
                     Criteria.where("phone").regex(regex, "i"),
                     Criteria.where("chiefComplaint").regex(regex, "i"),
                     Criteria.where("email").regex(regex, "i"),
                     Criteria.where("address").regex(regex, "i")));
+
+            if (search.trim().matches("\\d+")) {
+                searchCriteria.add(Criteria.where("cardNumber").is(Integer.parseInt(search.trim())));
+            }
+
+            query.addCriteria(new Criteria().orOperator(searchCriteria.toArray(new Criteria[0])));
         }
 
         return query;
@@ -180,6 +241,7 @@ public class ClinicService {
         Sort.Direction direction = resolveDirection(sortDirection, Sort.Direction.ASC);
 
         return switch (sortBy) {
+            case "cardNumber" -> Sort.by(direction, "cardNumber").and(Sort.by(Sort.Direction.ASC, "fullName"));
             case "lastVisit" -> Sort.by(direction, "lastVisit").and(Sort.by(Sort.Direction.ASC, "fullName"));
             case "fullName" -> Sort.by(direction, "fullName");
             default -> Sort.by(Sort.Direction.ASC, "fullName");
@@ -202,5 +264,11 @@ public class ClinicService {
         }
 
         return "asc".equalsIgnoreCase(sortDirection) ? Sort.Direction.ASC : Sort.Direction.DESC;
+    }
+
+    private void validatePaymentAmounts(Payment payment) {
+        if (payment.getAmountPaid() > payment.getTotalAmount()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Paid amount cannot exceed total amount");
+        }
     }
 }

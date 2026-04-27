@@ -21,10 +21,15 @@ createOrUpdateCollection("patients", {
   validator: {
     $jsonSchema: {
       bsonType: "object",
-      required: ["fullName", "age", "gender", "phone"],
+      required: ["cardNumber", "fullName", "age", "gender", "phone"],
       additionalProperties: false,
       properties: {
         _id: { bsonType: "objectId" },
+        cardNumber: {
+          bsonType: ["int", "long"],
+          minimum: 1,
+          description: "Patient card number must be a positive integer"
+        },
         fullName: {
           bsonType: "string",
           minLength: 1,
@@ -110,10 +115,41 @@ createOrUpdateCollection("appointments", {
   validationAction: "error"
 });
 
+createOrUpdateCollection("payments", {
+  validator: {
+    $jsonSchema: {
+      bsonType: "object",
+      required: ["patientId", "patientName", "totalAmount", "amountPaid", "paymentDate", "paymentMethod"],
+      additionalProperties: false,
+      properties: {
+        _id: { bsonType: "objectId" },
+        patientId: { bsonType: "string", minLength: 1 },
+        patientName: { bsonType: "string", minLength: 1 },
+        totalAmount: {
+          bsonType: ["int", "long", "double", "decimal"],
+          minimum: 0.01
+        },
+        amountPaid: {
+          bsonType: ["int", "long", "double", "decimal"],
+          minimum: 0
+        },
+        paymentDate: { bsonType: "date" },
+        paymentMethod: { bsonType: "string", minLength: 1 },
+        description: { bsonType: ["string", "null"] },
+        notes: { bsonType: ["string", "null"] }
+      }
+    }
+  },
+  validationLevel: "strict",
+  validationAction: "error"
+});
+
 clinicDb.patients.createIndex({ phone: 1 }, { name: "idx_patients_phone" });
+clinicDb.patients.createIndex({ cardNumber: 1 }, { name: "idx_patients_cardNumber", unique: true });
 clinicDb.patients.createIndex({ fullName: 1 }, { name: "idx_patients_fullName" });
 clinicDb.doctors.createIndex({ fullName: 1 }, { name: "idx_doctors_fullName" });
 clinicDb.appointments.createIndex({ appointmentDate: 1 }, { name: "idx_appointments_appointmentDate" });
+clinicDb.payments.createIndex({ patientId: 1, paymentDate: -1 }, { name: "idx_payments_patient_date" });
 clinicDb.appointments.createIndex(
   { patientId: 1, doctorId: 1, appointmentDate: 1 },
   { name: "idx_appointments_patient_doctor_date" }
@@ -121,6 +157,7 @@ clinicDb.appointments.createIndex(
 
 const patients = [
   {
+    cardNumber: 1,
     fullName: "Ananya Sharma",
     age: 29,
     gender: "Female",
@@ -132,6 +169,7 @@ const patients = [
     lastVisit: new Date("2026-04-02T00:00:00Z")
   },
   {
+    cardNumber: 2,
     fullName: "Rahul Verma",
     age: 41,
     gender: "Male",
@@ -143,6 +181,7 @@ const patients = [
     lastVisit: new Date("2026-04-08T00:00:00Z")
   },
   {
+    cardNumber: 3,
     fullName: "Meera Iyer",
     age: 35,
     gender: "Female",
@@ -154,6 +193,7 @@ const patients = [
     lastVisit: new Date("2026-03-29T00:00:00Z")
   },
   {
+    cardNumber: 4,
     fullName: "Arjun Patel",
     age: 52,
     gender: "Male",
@@ -165,6 +205,7 @@ const patients = [
     lastVisit: new Date("2026-04-10T00:00:00Z")
   },
   {
+    cardNumber: 5,
     fullName: "Sara Khan",
     age: 24,
     gender: "Female",
@@ -188,6 +229,7 @@ const doctors = [
 ];
 
 clinicDb.appointments.deleteMany({});
+clinicDb.payments.deleteMany({});
 clinicDb.patients.deleteMany({});
 clinicDb.doctors.deleteMany({});
 
@@ -211,8 +253,8 @@ const appointments = [
   {
     patientId: patientIds[1],
     patientName: patients[1].fullName,
-    doctorId: doctorIds[1],
-    doctorName: doctors[1].fullName,
+    doctorId: doctorIds[0],
+    doctorName: doctors[0].fullName,
     appointmentDate: new Date("2026-04-18T07:00:00Z"),
     status: "Scheduled",
     notes: "Digestive symptom follow-up",
@@ -221,8 +263,8 @@ const appointments = [
   {
     patientId: patientIds[2],
     patientName: patients[2].fullName,
-    doctorId: doctorIds[2],
-    doctorName: doctors[2].fullName,
+    doctorId: doctorIds[0],
+    doctorName: doctors[0].fullName,
     appointmentDate: new Date("2026-04-19T05:15:00Z"),
     status: "Scheduled",
     notes: "Check allergy improvement",
@@ -231,8 +273,8 @@ const appointments = [
   {
     patientId: patientIds[3],
     patientName: patients[3].fullName,
-    doctorId: doctorIds[1],
-    doctorName: doctors[1].fullName,
+    doctorId: doctorIds[0],
+    doctorName: doctors[0].fullName,
     appointmentDate: new Date("2026-04-14T09:00:00Z"),
     status: "Completed",
     notes: "Pain reduced after previous course",
@@ -252,8 +294,64 @@ const appointments = [
 
 clinicDb.appointments.insertMany(appointments);
 
+const payments = [
+  {
+    patientId: patientIds[0],
+    patientName: patients[0].fullName,
+    description: "Initial consultation and remedy kit",
+    totalAmount: 1800,
+    amountPaid: 1800,
+    paymentDate: new Date("2026-04-02T00:00:00Z"),
+    paymentMethod: "UPI",
+    notes: "Fully settled during first visit"
+  },
+  {
+    patientId: patientIds[1],
+    patientName: patients[1].fullName,
+    description: "Digestive follow-up package",
+    totalAmount: 2200,
+    amountPaid: 1200,
+    paymentDate: new Date("2026-04-08T00:00:00Z"),
+    paymentMethod: "Cash",
+    notes: "Balance to be collected on next review"
+  },
+  {
+    patientId: patientIds[2],
+    patientName: patients[2].fullName,
+    description: "Allergy treatment plan",
+    totalAmount: 1500,
+    amountPaid: 1500,
+    paymentDate: new Date("2026-03-29T00:00:00Z"),
+    paymentMethod: "Card",
+    notes: "Paid in full"
+  },
+  {
+    patientId: patientIds[3],
+    patientName: patients[3].fullName,
+    description: "Joint pain review and medicines",
+    totalAmount: 2600,
+    amountPaid: 2000,
+    paymentDate: new Date("2026-04-14T00:00:00Z"),
+    paymentMethod: "Bank Transfer",
+    notes: "Remaining due next week"
+  },
+  {
+    patientId: patientIds[4],
+    patientName: patients[4].fullName,
+    description: "Stress consultation",
+    totalAmount: 1700,
+    amountPaid: 700,
+    paymentDate: new Date("2026-04-12T00:00:00Z"),
+    paymentMethod: "Cash",
+    notes: "Partial advance collected"
+  }
+];
+
+clinicDb.payments.insertMany(payments);
+
 print("");
 print(`Initialized database: ${dbName}`);
 print(`Seeded ${patients.length} patients`);
 print(`Seeded ${doctors.length} doctors`);
 print(`Seeded ${appointments.length} appointments`);
+print(`Seeded ${payments.length} payments`);
