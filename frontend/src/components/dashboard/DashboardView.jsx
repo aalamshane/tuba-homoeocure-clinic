@@ -1,3 +1,4 @@
+import { useState } from "react";
 import ConfirmDialog from "../common/ConfirmDialog";
 import DataTable from "../common/DataTable";
 import HoverText from "../common/HoverText";
@@ -15,15 +16,18 @@ export default function DashboardView({
   appointmentTable,
   patientOptions,
   doctorOptions,
+  maxPatientCardNumber,
   patientForm,
+  patientIntakeOpen,
   appointmentForm,
   deleteTarget,
   patientIntakeRef,
   patientNameInputRef,
   onRefresh,
+  onOpenPatientIntake,
+  onClosePatientIntake,
   onPatientFormChange,
   onPatientSubmit,
-  onPatientReset,
   onAppointmentFormChange,
   onAppointmentPatientChange,
   onAppointmentDoctorChange,
@@ -36,6 +40,9 @@ export default function DashboardView({
   onCancelDelete,
   onConfirmDelete
 }) {
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const nextPatientCardNumber = maxPatientCardNumber == null ? "" : String(Number(maxPatientCardNumber) + 1);
+
   return (
     <main className="app-shell">
       <section className="hero">
@@ -43,9 +50,14 @@ export default function DashboardView({
           <p className="eyebrow">Run consultations, schedules, and patient records from one calm workspace.</p>
           <h2>Welcome to Dr. Tuba&apos;s Homoeocure clinic</h2>
         </div>
-        <button className="secondary-button" onClick={onRefresh}>
-          Refresh Data
-        </button>
+        <div className="hero-actions">
+          <button className="secondary-button" onClick={onOpenPatientIntake}>
+            Patient Intake
+          </button>
+          <button className="secondary-button" onClick={onRefresh}>
+            Refresh Data
+          </button>
+        </div>
       </section>
 
       {error ? <div className="alert">{error}</div> : null}
@@ -59,101 +71,59 @@ export default function DashboardView({
       </section>
 
       <section className="content-grid">
-        <SectionCard title="Patient Intake" subtitle="Create or update a patient profile with symptoms and history.">
-          <form ref={patientIntakeRef} className="form-grid" onSubmit={onPatientSubmit}>
-            <input
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={patientForm.cardNumber}
-              placeholder="Card Number"
-              onChange={(event) => onPatientFormChange("cardNumber", event.target.value.replace(/\D/g, ""))}
-              aria-label="Card Number"
-              required
-            />
-            <input
-              ref={patientNameInputRef}
-              placeholder="Full name"
-              value={patientForm.fullName}
-              onChange={(event) => onPatientFormChange("fullName", event.target.value)}
-              required
-            />
-            <input
-              type="number"
-              min="0"
-              placeholder="Age"
-              value={patientForm.age}
-              onChange={(event) => onPatientFormChange("age", event.target.value)}
-              required
-            />
-            <select value={patientForm.gender} onChange={(event) => onPatientFormChange("gender", event.target.value)}>
-              <option>Female</option>
-              <option>Male</option>
-              <option>Other</option>
-            </select>
-            <input
-              placeholder="Phone"
-              value={patientForm.phone}
-              onChange={(event) => onPatientFormChange("phone", event.target.value)}
-              required
-            />
-            <input placeholder="Email" value={patientForm.email} onChange={(event) => onPatientFormChange("email", event.target.value)} />
-            <input type="date" value={patientForm.lastVisit} onChange={(event) => onPatientFormChange("lastVisit", event.target.value)} />
-            <textarea placeholder="Address" value={patientForm.address} onChange={(event) => onPatientFormChange("address", event.target.value)} />
-            <textarea
-              placeholder="Chief complaint"
-              value={patientForm.chiefComplaint}
-              onChange={(event) => onPatientFormChange("chiefComplaint", event.target.value)}
-            />
-            <textarea
-              placeholder="Medical history"
-              value={patientForm.medicalHistory}
-              onChange={(event) => onPatientFormChange("medicalHistory", event.target.value)}
-            />
-            <div className="form-actions">
-              <button type="submit">{patientForm.id ? "Update Patient" : "Save Patient"}</button>
-              {patientForm.id ? <button type="button" className="ghost-button" onClick={onPatientReset}>Cancel Edit</button> : null}
+        <section className="panel collapsible-panel">
+          <button
+            type="button"
+            className="panel__header collapsible-header collapsible-header-button"
+            onClick={() => setScheduleOpen((current) => !current)}
+            aria-expanded={scheduleOpen}
+          >
+            <div>
+              <h2>Schedule Consultation</h2>
+              <p>Link a patient to a doctor and add remedy planning notes.</p>
             </div>
-          </form>
-        </SectionCard>
-
-        <SectionCard title="Schedule Consultation" subtitle="Link a patient to a doctor and add remedy planning notes.">
-          <form className="form-grid" onSubmit={onAppointmentSubmit}>
-            <SearchablePatientSelect
-              value={appointmentForm.patientId}
-              patientOptions={patientOptions}
-              onChange={onAppointmentPatientChange}
-              required
-            />
-            <select value={appointmentForm.doctorId} onChange={(event) => onAppointmentDoctorChange(event.target.value)} required>
-              <option value="">Select doctor</option>
-              {doctorOptions.map((doctor) => (
-                <option key={doctor.id} value={doctor.id}>{doctor.fullName}</option>
-              ))}
-            </select>
-            <input
-              type="datetime-local"
-              value={appointmentForm.appointmentDate}
-              onChange={(event) => onAppointmentFormChange("appointmentDate", event.target.value)}
-              required
-            />
-            <select value={appointmentForm.status} onChange={(event) => onAppointmentFormChange("status", event.target.value)}>
-              <option>Scheduled</option>
-              <option>Completed</option>
-              <option>Cancelled</option>
-            </select>
-            <textarea placeholder="Case notes" value={appointmentForm.notes} onChange={(event) => onAppointmentFormChange("notes", event.target.value)} />
-            <textarea
-              placeholder="Remedy plan"
-              value={appointmentForm.remedyPlan}
-              onChange={(event) => onAppointmentFormChange("remedyPlan", event.target.value)}
-            />
-            <div className="form-actions">
-              <button type="submit">{appointmentForm.id ? "Update Appointment" : "Book Appointment"}</button>
-              {appointmentForm.id ? <button type="button" className="ghost-button" onClick={onAppointmentReset}>Cancel Edit</button> : null}
-            </div>
-          </form>
-        </SectionCard>
+            <span className="ghost-button collapse-toggle">
+              <span className={scheduleOpen ? "collapse-arrow collapse-arrow--open" : "collapse-arrow"} aria-hidden="true" />
+            </span>
+          </button>
+          {scheduleOpen ? (
+            <form className="form-grid schedule-form-grid" onSubmit={onAppointmentSubmit}>
+              <SearchablePatientSelect
+                value={appointmentForm.patientId}
+                patientOptions={patientOptions}
+                onChange={onAppointmentPatientChange}
+                required
+              />
+              <select value={appointmentForm.doctorId} onChange={(event) => onAppointmentDoctorChange(event.target.value)} required>
+                <option value="">Select doctor</option>
+                {doctorOptions.map((doctor) => (
+                  <option key={doctor.id} value={doctor.id}>{doctor.fullName}</option>
+                ))}
+              </select>
+              <input
+                type="datetime-local"
+                value={appointmentForm.appointmentDate}
+                onChange={(event) => onAppointmentFormChange("appointmentDate", event.target.value)}
+                required
+              />
+              <select value={appointmentForm.status} onChange={(event) => onAppointmentFormChange("status", event.target.value)}>
+                <option>Scheduled</option>
+                <option>Completed</option>
+                <option>Cancelled</option>
+              </select>
+              <textarea placeholder="Case notes" value={appointmentForm.notes} onChange={(event) => onAppointmentFormChange("notes", event.target.value)} />
+              <textarea
+                placeholder="Remedy plan"
+                value={appointmentForm.remedyPlan}
+                onChange={(event) => onAppointmentFormChange("remedyPlan", event.target.value)}
+              />
+              <div className="form-actions">
+                <button type="submit">{appointmentForm.id ? "Update Appointment" : "Book Appointment"}</button>
+                {appointmentForm.id ? <button type="button" className="ghost-button" onClick={onAppointmentReset}>Cancel Edit</button> : null}
+              </div>
+            </form>
+          ) : null}
+        </section>
       </section>
 
       <section className="table-grid">
@@ -215,6 +185,88 @@ export default function DashboardView({
           />
         </SectionCard>
       </section>
+
+      {patientIntakeOpen ? (
+        <div className="modal-backdrop" role="presentation">
+          <div className="intake-modal" role="dialog" aria-modal="true" aria-labelledby="patient-intake-title">
+            <div className="modal-header">
+              <div>
+                <h3 id="patient-intake-title">Patient Intake</h3>
+                <p>Create or update a patient profile with symptoms and history.</p>
+              </div>
+              <button type="button" className="ghost-button modal-close-button" onClick={onClosePatientIntake} aria-label="Close patient intake">
+                Close
+              </button>
+            </div>
+            <form ref={patientIntakeRef} className="form-grid intake-form-grid" onSubmit={onPatientSubmit}>
+              <div className="card-number-helper">
+                <span>Last Card Number</span>
+                <strong>{maxPatientCardNumber ?? "None"}</strong>
+                {nextPatientCardNumber ? (
+                  <button type="button" className="ghost-button" onClick={() => onPatientFormChange("cardNumber", nextPatientCardNumber)}>
+                    Use {nextPatientCardNumber}
+                  </button>
+                ) : null}
+              </div>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={patientForm.cardNumber}
+                placeholder="Card Number"
+                onChange={(event) => onPatientFormChange("cardNumber", event.target.value.replace(/\D/g, ""))}
+                aria-label="Card Number"
+                required
+              />
+              <input
+                ref={patientNameInputRef}
+                placeholder="Full name"
+                value={patientForm.fullName}
+                onChange={(event) => onPatientFormChange("fullName", event.target.value)}
+                required
+              />
+              <input
+                type="number"
+                min="0"
+                placeholder="Age"
+                value={patientForm.age}
+                onChange={(event) => onPatientFormChange("age", event.target.value)}
+                required
+              />
+              <select value={patientForm.gender} onChange={(event) => onPatientFormChange("gender", event.target.value)}>
+                <option>Female</option>
+                <option>Male</option>
+                <option>Other</option>
+              </select>
+              <input
+                placeholder="Phone"
+                value={patientForm.phone}
+                onChange={(event) => onPatientFormChange("phone", event.target.value)}
+                required
+              />
+              <input placeholder="Email" value={patientForm.email} onChange={(event) => onPatientFormChange("email", event.target.value)} />
+              <input type="date" value={patientForm.lastVisit} onChange={(event) => onPatientFormChange("lastVisit", event.target.value)} />
+              <textarea placeholder="Address" value={patientForm.address} onChange={(event) => onPatientFormChange("address", event.target.value)} />
+              <textarea
+                placeholder="Chief complaint"
+                value={patientForm.chiefComplaint}
+                onChange={(event) => onPatientFormChange("chiefComplaint", event.target.value)}
+              />
+              <textarea
+                placeholder="Medical history"
+                value={patientForm.medicalHistory}
+                onChange={(event) => onPatientFormChange("medicalHistory", event.target.value)}
+              />
+              <div className="form-actions intake-form-actions">
+                <button type="submit">{patientForm.id ? "Update Patient" : "Save Patient"}</button>
+                <button type="button" className="ghost-button" onClick={onClosePatientIntake}>
+                  {patientForm.id ? "Cancel Edit" : "Cancel"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
 
       <ConfirmDialog item={deleteTarget} onCancel={onCancelDelete} onConfirm={onConfirmDelete} />
     </main>

@@ -46,10 +46,12 @@ export default function App() {
   });
   const [patientOptions, setPatientOptions] = useState([]);
   const [doctorOptions, setDoctorOptions] = useState([]);
+  const [maxPatientCardNumber, setMaxPatientCardNumber] = useState(null);
   const [patientForm, setPatientForm] = useState(emptyPatient);
   const [appointmentForm, setAppointmentForm] = useState(emptyAppointment);
   const [paymentForm, setPaymentForm] = useState(createEmptyPaymentForm);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [patientIntakeOpen, setPatientIntakeOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -89,6 +91,11 @@ export default function App() {
     setDoctorOptions(doctorData.items);
   }
 
+  async function loadMaxPatientCardNumber() {
+    const patientData = await api.get("/api/patients?page=1&size=5&sortBy=cardNumber&sortDirection=desc");
+    setMaxPatientCardNumber(patientData.items[0]?.cardNumber ?? null);
+  }
+
   async function loadData() {
     try {
       setLoading(true);
@@ -98,7 +105,8 @@ export default function App() {
         fetchTable("patients", patientTable, setPatientTable),
         fetchTable("doctors", doctorTable, setDoctorTable),
         fetchTable("appointments", appointmentTable, setAppointmentTable),
-        loadOptions()
+        loadOptions(),
+        loadMaxPatientCardNumber()
       ]);
       setError("");
     } catch (requestError) {
@@ -181,7 +189,7 @@ export default function App() {
       return;
     }
 
-    patientIntakeRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setPatientIntakeOpen(true);
     window.requestAnimationFrame(() => {
       patientNameInputRef.current?.focus();
       patientNameInputRef.current?.select();
@@ -195,8 +203,10 @@ export default function App() {
       await api[method](path, payload);
       reset();
       await loadData();
+      return true;
     } catch (requestError) {
       setError("Unable to save your changes. Please verify the form values and API status.");
+      return false;
     }
   }
 
@@ -206,6 +216,19 @@ export default function App() {
 
   function resetPatientForm() {
     setPatientForm(emptyPatient);
+  }
+
+  function openPatientIntake() {
+    setPatientForm(emptyPatient);
+    setPatientIntakeOpen(true);
+    window.requestAnimationFrame(() => {
+      patientNameInputRef.current?.focus();
+    });
+  }
+
+  function closePatientIntake() {
+    setPatientIntakeOpen(false);
+    resetPatientForm();
   }
 
   function resetAppointmentForm() {
@@ -256,7 +279,7 @@ export default function App() {
   }
 
   async function handlePatientSubmit(event) {
-    await handleSubmit(
+    const saved = await handleSubmit(
       event,
       patientForm.id ? "put" : "post",
       patientForm.id ? `/api/patients/${patientForm.id}` : "/api/patients",
@@ -274,6 +297,10 @@ export default function App() {
       },
       resetPatientForm
     );
+
+    if (saved) {
+      setPatientIntakeOpen(false);
+    }
   }
 
   async function handleAppointmentSubmit(event) {
@@ -376,15 +403,18 @@ export default function App() {
       appointmentTable={appointmentTable}
       patientOptions={patientOptions}
       doctorOptions={doctorOptions}
+      maxPatientCardNumber={maxPatientCardNumber}
       patientForm={patientForm}
+      patientIntakeOpen={patientIntakeOpen}
       appointmentForm={appointmentForm}
       deleteTarget={deleteTarget}
       patientIntakeRef={patientIntakeRef}
       patientNameInputRef={patientNameInputRef}
       onRefresh={loadData}
+      onOpenPatientIntake={openPatientIntake}
+      onClosePatientIntake={closePatientIntake}
       onPatientFormChange={updatePatientForm}
       onPatientSubmit={handlePatientSubmit}
-      onPatientReset={resetPatientForm}
       onAppointmentFormChange={updateAppointmentForm}
       onAppointmentPatientChange={(patientId) => syncAppointmentSelection("patientId", patientId)}
       onAppointmentDoctorChange={(doctorId) => syncAppointmentSelection("doctorId", doctorId)}
